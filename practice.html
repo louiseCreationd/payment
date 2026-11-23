@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel-to-CSV Vault | Cloud Portal</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- SheetJS for automatic Excel (.xlsx/.xls) to CSV conversion -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <style>
+        body {
+            background-color: #0f1115;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card {
+            background-color: #181b21;
+            border: 1px solid #2d333b;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+        }
+        .navbar {
+            background-color: #16191f !important;
+            border-bottom: 1px solid #2d333b;
+        }
+        .table-dark {
+            --bs-table-bg: #181b21;
+            --bs-table-border-color: #2d333b;
+        }
+        .table-responsive {
+            overflow: visible !important;
+        }
+        #status-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 9999;
+            min-width: 300px;
+        }
+        .trail-box {
+            max-height: 220px;
+            overflow-y: auto;
+            background-color: #121418;
+            border: 1px solid #2d333b;
+            border-radius: 6px;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- TOP NAVBAR WITH QUIT BUTTON IN RIGHT UPPER CORNER -->
+<nav class="navbar navbar-expand-lg navbar-dark px-4 py-2 mb-4">
+    <div class="container-fluid">
+        <div class="d-flex align-items-center gap-2">
+            <span class="navbar-brand fw-bold text-info mb-0">CSV Data Vault</span>
+            <span id="cloud-status-badge" class="badge bg-warning text-dark">Connecting to Cloud...</span>
+        </div>
+        <div class="ms-auto d-flex align-items-center gap-3">
+            <div id="user-badge-area" class="d-none d-flex align-items-center gap-2">
+                <span class="badge bg-secondary" id="nav-username"></span>
+                <span class="badge bg-primary" id="nav-level"></span>
+            </div>
+            <!-- Requirement 10: Quit Button in Upper Right Corner -->
+            <button onclick="quitApplication()" class="btn btn-danger btn-sm fw-bold px-3">Quit</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container">
+
+    <!-- LOGIN VIEW -->
+    <div id="login-view" class="row justify-content-center mt-5">
+        <div class="col-md-5 col-lg-4">
+            <div class="card p-4">
+                <h4 class="text-center mb-3 text-info">System Login</h4>
+                <div id="login-error" class="alert alert-danger py-2 small d-none"></div>
+                <form onsubmit="handleLogin(event)">
+                    <div class="mb-3">
+                        <label class="form-label small">Username</label>
+                        <input type="text" id="login-user" class="form-control" placeholder="Enter username" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small">Password</label>
+                        <input type="password" id="login-pass" class="form-control" placeholder="Enter password" required>
+                    </div>
+                    <button type="submit" id="login-submit-btn" class="btn btn-info w-100 fw-bold" disabled>Connecting...</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN DASHBOARD VIEW -->
+    <div id="dashboard-view" class="d-none">
+        <div class="row g-4">
+
+            <!-- LEFT / MAIN COLUMN: UPLOAD & FILE LIST -->
+            <div id="main-col" class="col-lg-12">
+
+                <!-- ADMIN ONLY: UPLOAD EXCEL/CSV & GLOBAL DOWNLOAD TOGGLE -->
+                <div id="admin-upload-panel" class="card p-3 mb-4 d-none">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3 gap-2">
+                        <h5 class="text-info mb-0">Admin File Controls</h5>
+                        <!-- Requirement 9: Enable or Disable Download Button -->
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="toggle-downloads" onchange="toggleDownloadState()">
+                            <label class="form-check-label fw-bold text-warning" for="toggle-downloads" id="toggle-downloads-label">
+                                Downloads Enabled
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Requirement 2 & 4: Upload Excel (auto-converted to CSV) or CSV -->
+                    <form onsubmit="handleFileUpload(event)">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label small">Select Excel (*.xlsx, *.xls) or *.csv File</label>
+                                <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label small">Min Database Access Level (1-10)</label>
+                                <input type="number" id="file-level" value="1" min="1" max="10" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-md-3">
+                                <button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Convert & Upload CSV</button>
+                            </div>
+                        </div>
+                        <div id="upload-progress-bar" class="progress mt-2 d-none" style="height: 6px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 100%"></div>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- DATABASE CSV FILES TABLE -->
+                <div class="card p-3">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h5 class="mb-0">Stored CSV Files in Database</h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <!-- Bulk Actions Dropdown -->
+                            <div id="bulk-actions-dropdown" class="dropdown d-none">
+                                <button class="btn btn-outline-info btn-sm dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    Bulk Actions (<span id="selected-count">0</span>)
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow">
+                                    <li>
+                                        <button class="dropdown-item text-info" type="button" onclick="downloadSelectedCSVs()">
+                                            Download Selected
+                                        </button>
+                                    </li>
+                                    <li id="bulk-delete-divider"><hr class="dropdown-divider"></li>
+                                    <li id="bulk-delete-item">
+                                        <button class="dropdown-item text-danger" type="button" onclick="deleteSelectedCSVs()">
+                                            Delete Selected
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+
+                            <span id="download-disabled-banner" class="badge bg-danger d-none">Downloads Temporarily Disabled by Admin</span>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" class="form-check-input" id="select-all-files" onchange="toggleSelectAllFiles(this)" title="Select All Files">
+                                    </th>
+                                    <th>CSV Filename</th>
+                                    <th>Required Level</th>
+                                    <th>Uploaded Date</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="files-table-body">
+                                <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN (ADMIN ONLY): NOTIFICATIONS & USER MANAGEMENT -->
+            <div id="admin-side-col" class="col-lg-5 d-none">
+
+                <!-- Requirement 8: Admin Download Notification Trail -->
+                <div class="card p-3 mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h5 class="text-warning mb-0">Admin Notification Trail</h5>
+                        <button onclick="clearNotifications()" class="btn btn-outline-secondary btn-sm py-0 px-2">Clear</button>
+                    </div>
+                    <div id="notification-trail" class="trail-box small">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <!-- Requirement 1: User Management (Admin Hidden) -->
+                <div class="card p-3">
+                    <h5 class="text-info mb-3">User Management</h5>
+                    <form onsubmit="handleAddUser(event)" class="row g-2 mb-3">
+                        <div class="col-4">
+                            <input type="text" id="new-username" placeholder="Username" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-3">
+                            <input type="password" id="new-password" placeholder="Password" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-2">
+                            <input type="number" id="new-level" value="1" min="1" max="10" title="Access Level" class="form-control form-control-sm" required>
+                        </div>
+                        <div class="col-3">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">Add User</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-dark table-sm align-middle small mb-0">
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Level</th>
+                                    <th>Reset Password</th>
+                                    <th>Del</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                                <!-- Populated via JS (Admin account excluded) -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- QUIT SCREEN OVERLAY -->
+    <div id="quit-view" class="row justify-content-center mt-5 d-none">
+        <div class="col-md-5 text-center">
+            <div class="card p-5">
+                <h3 class="text-danger mb-3">Session Terminated</h3>
+                <p class="text-muted mb-4">You have safely quit the CSV Data Vault application.</p>
+                <button onclick="location.reload()" class="btn btn-outline-info">Return to Login</button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Requirement 5: Upload / Download Completion Toast Indicator -->
+<div id="status-toast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+        <div class="toast-body fw-bold" id="toast-msg">Done!</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- FIREBASE CLOUD FIRESTORE INTEGRATION -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-analytics.js";
+    import {
+        getFirestore,
+        collection,
+        doc,
+        getDoc,
+        getDocs,
+        setDoc,
+        addDoc,
+        updateDoc,
+        deleteDoc,
+        onSnapshot,
+        query,
+        orderBy,
+        writeBatch
+    } from "https://www.gstatic.com/firebasejs/13.4.0/firebase-firestore.js";
+
+    // Your web app's Firebase configuration
+    const firebaseConfig = {
+        apiKey: "AIzaSyDiiPNGMi7IWLHkoBFDAkpK-7gIBAxjSPQ",
+        authDomain: "prepayment-fdced.firebaseapp.com",
+        databaseURL: "https://prepayment-fdced-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "prepayment-fdced",
+        storageBucket: "prepayment-fdced.firebasestorage.app",
+        messagingSenderId: "1068806584103",
+        appId: "1:1068806584103:web:4d7c0fcc3d925f6cb99b02",
+        measurementId: "G-JK45SWTF9N"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    try { getAnalytics(app); } catch (e) {}
+    const db = getFirestore(app);
+
+    let currentUser = null;
+    let cachedFiles = [];
+    let cachedUsers = [];
+    let downloadsEnabled = true;
+    let unsubscribers = [];
+
+    // ==========================================
+    // 1. INITIALIZE DEFAULT CLOUD DATA
+    // ==========================================
+    async function initCloudDefaults() {
+        const statusBadge = document.getElementById('cloud-status-badge');
+        const loginBtn = document.getElementById('login-submit-btn');
+
+        try {
+            const usersSnap = await getDocs(collection(db, "users"));
+            if (usersSnap.empty) {
+                await setDoc(doc(db, "users", "admin"), {
+                    username: "admin",
+                    password: "admin123",
+                    role: "admin",
+                    level: 10
+                });
+                await setDoc(doc(db, "users", "user1"), {
+                    username: "user1",
+                    password: "123",
+                    role: "user",
+                    level: 1
+                });
+            }
+
+            const settingsRef = doc(db, "settings", "global");
+            const settingsSnap = await getDoc(settingsRef);
+            if (!settingsSnap.exists()) {
+                await setDoc(settingsRef, { downloadsEnabled: true });
+            }
+
+            statusBadge.className = "badge bg-success";
+            statusBadge.innerText = "Cloud Connected";
+            loginBtn.disabled = false;
+            loginBtn.innerText = "Login";
+        } catch (err) {
+            console.error("Firebase init error:", err);
+            statusBadge.className = "badge bg-danger";
+            statusBadge.innerText = "Cloud Connection Error";
+            loginBtn.innerText = "Connection Failed";
+            showIndicator("Could not connect to Firestore: " + err.message, "danger");
+        }
+    }
+
+    initCloudDefaults();
+
+    // ==========================================
+    // 2. INDICATOR HELPER (Requirement 5)
+    // ==========================================
+    function showIndicator(message, type = 'success') {
+        const toastEl = document.getElementById('status-toast');
+        const toastMsg = document.getElementById('toast-msg');
+        toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+        toastMsg.innerText = message;
+        const toast = new bootstrap.Toast(toastEl, { delay: 3500 });
+        toast.show();
+    }
+
+    // ==========================================
+    // 3. AUTHENTICATION & QUIT (Requirements 1 & 10)
+    // ==========================================
+    window.handleLogin = async function(e) {
+        e.preventDefault();
+        const uInput = document.getElementById('login-user').value.trim();
+        const pInput = document.getElementById('login-pass').value;
+        const errBox = document.getElementById('login-error');
+
+        try {
+            const userSnap = await getDoc(doc(db, "users", uInput));
+            if (!userSnap.exists() || userSnap.data().password !== pInput) {
+                errBox.innerText = 'Invalid username or password.';
+                errBox.classList.remove('d-none');
+                return;
+            }
+
+            currentUser = userSnap.data();
+            errBox.classList.add('d-none');
+            document.getElementById('login-view').classList.add('d-none');
+            document.getElementById('dashboard-view').classList.remove('d-none');
+            document.getElementById('user-badge-area').classList.remove('d-none');
+
+            document.getElementById('nav-username').innerText = `User: ${currentUser.username}`;
+            document.getElementById('nav-level').innerText = `Level ${currentUser.level}`;
+
+            setupRoleUI();
+            startRealtimeListeners();
+        } catch (err) {
+            errBox.innerText = 'Login error: ' + err.message;
+            errBox.classList.remove('d-none');
+        }
+    };
+
+    window.quitApplication = function() {
+        unsubscribers.forEach(unsub => unsub());
+        unsubscribers = [];
+        currentUser = null;
+        document.getElementById('login-view').classList.add('d-none');
+        document.getElementById('dashboard-view').classList.add('d-none');
+        document.getElementById('user-badge-area').classList.add('d-none');
+        document.getElementById('quit-view').classList.remove('d-none');
+        try { window.close(); } catch (e) {}
+    };
+
+    function setupRoleUI() {
+        const isAdmin = currentUser.role === 'admin';
+        const mainCol = document.getElementById('main-col');
+        const adminUpload = document.getElementById('admin-upload-panel');
+        const adminSide = document.getElementById('admin-side-col');
+
+        if (isAdmin) {
+            mainCol.className = 'col-lg-7';
+            adminUpload.classList.remove('d-none');
+            adminSide.classList.remove('d-none');
+        } else {
+            mainCol.className = 'col-lg-12';
+            adminUpload.classList.add('d-none');
+            adminSide.classList.add('d-none');
+        }
+    }
+
+    // ==========================================
+    // 4. REAL-TIME FIRESTORE LISTENERS
+    // ==========================================
+    function startRealtimeListeners() {
+        const unsubSettings = onSnapshot(doc(db, "settings", "global"), (docSnap) => {
+            if (docSnap.exists()) {
+                downloadsEnabled = docSnap.data().downloadsEnabled !== false;
+                if (currentUser && currentUser.role === 'admin') {
+                    document.getElementById('toggle-downloads').checked = downloadsEnabled;
+                    document.getElementById('toggle-downloads-label').innerText = downloadsEnabled ? 'Downloads Enabled' : 'Downloads Disabled';
+                }
+                renderFilesTable();
+            }
+        });
+        unsubscribers.push(unsubSettings);
+
+        const filesQuery = query(collection(db, "csv_files"), orderBy("createdAt", "desc"));
+        const unsubFiles = onSnapshot(filesQuery, (snapshot) => {
+            cachedFiles = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderFilesTable();
+        });
+        unsubscribers.push(unsubFiles);
+
+        if (currentUser.role === 'admin') {
+            const unsubUsers = onSnapshot(collection(db, "users"), (snapshot) => {
+                cachedUsers = snapshot.docs.map(d => d.data());
+                renderUsersTable();
+            });
+            unsubscribers.push(unsubUsers);
+
+            const notesQuery = query(collection(db, "notifications"), orderBy("createdAt", "desc"));
+            const unsubNotes = onSnapshot(notesQuery, (snapshot) => {
+                const notes = snapshot.docs.map(d => d.data());
+                renderNotifications(notes);
+            });
+            unsubscribers.push(unsubNotes);
+        }
+    }
+
+    // ==========================================
+    // 5. EXCEL TO CSV CONVERSION & CLOUD UPLOAD
+    // ==========================================
+    window.handleFileUpload = function(e) {
+        e.preventDefault();
+        if (!currentUser || currentUser.role !== 'admin') return;
+
+        const fileInput = document.getElementById('file-input');
+        const reqLevel = parseInt(document.getElementById('file-level').value, 10);
+        const file = fileInput.files[0];
+        if (!file) return;
+
+        const progressBar = document.getElementById('upload-progress-bar');
+        progressBar.classList.remove('d-none');
+
+        const reader = new FileReader();
+        reader.onload = async function(evt) {
+            try {
+                const data = new Uint8Array(evt.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const csvContent = XLSX.utils.sheet_to_csv(worksheet);
+
+                if (new Blob([csvContent]).size > 950000) {
+                    progressBar.classList.add('d-none');
+                    showIndicator('File is too large (>950 KB) for a single Firestore document.', 'danger');
+                    return;
+                }
+
+                const baseName = file.name.replace(/\.[^/.]+$/, "");
+                const csvFilename = `${baseName}.csv`;
+
+                await addDoc(collection(db, "csv_files"), {
+                    filename: csvFilename,
+                    content: csvContent,
+                    requiredLevel: reqLevel,
+                    uploadedAt: new Date().toLocaleString(),
+                    createdAt: Date.now()
+                });
+
+                progressBar.classList.add('d-none');
+                fileInput.value = '';
+                showIndicator(`Upload Done! "${csvFilename}" is now live in the cloud.`, 'success');
+            } catch (err) {
+                progressBar.classList.add('d-none');
+                showIndicator('Error uploading file: ' + err.message, 'danger');
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    // ==========================================
+    // 6. DOWNLOAD, DELETE & BULK DROPDOWN ACTIONS
+    // ==========================================
+    window.toggleDownloadState = async function() {
+        if (!currentUser || currentUser.role !== 'admin') return;
+        const isChecked = document.getElementById('toggle-downloads').checked;
+        await setDoc(doc(db, "settings", "global"), { downloadsEnabled: isChecked });
+        showIndicator(`Download buttons are now ${isChecked ? 'ENABLED' : 'DISABLED'} for all users.`, 'info');
+    };
+
+    window.downloadCSV = async function(fileId, silent = false) {
+        if (!downloadsEnabled && currentUser.role !== 'admin') {
+            showIndicator('Downloads are currently disabled by the Admin.', 'danger');
+            return;
+        }
+
+        const fileRecord = cachedFiles.find(f => f.id === fileId);
+        if (!fileRecord) return;
+
+        const blob = new Blob([fileRecord.content], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileRecord.filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        if (!silent) {
+            showIndicator(`Download Done: "${fileRecord.filename}"`, 'success');
+        }
+
+        await addDoc(collection(db, "notifications"), {
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            date: new Date().toLocaleDateString(),
+            text: `User "${currentUser.username}" downloaded "${fileRecord.filename}"`,
+            createdAt: Date.now()
+        });
+    };
+
+    window.deleteCSV = async function(fileId) {
+        if (!currentUser || currentUser.role !== 'admin') return;
+        if (!confirm('Delete this CSV file from the cloud database?')) return;
+
+        await deleteDoc(doc(db, "csv_files", fileId));
+        showIndicator('CSV file deleted from cloud database.', 'warning');
+    };
+
+    window.toggleSelectAllFiles = function(masterCheckbox) {
+        document.querySelectorAll('.file-checkbox').forEach(cb => {
+            cb.checked = masterCheckbox.checked;
+        });
+        updateBulkActionsUI();
+    };
+
+    window.updateBulkActionsUI = function() {
+        const allBoxes = document.querySelectorAll('.file-checkbox');
+        const selected = document.querySelectorAll('.file-checkbox:checked');
+        const dropdownWrapper = document.getElementById('bulk-actions-dropdown');
+        const countSpan = document.getElementById('selected-count');
+        const selectAllEl = document.getElementById('select-all-files');
+        const isAdmin = currentUser && currentUser.role === 'admin';
+
+        if (selectAllEl) {
+            selectAllEl.checked = allBoxes.length > 0 && selected.length === allBoxes.length;
+        }
+
+        document.getElementById('bulk-delete-divider').classList.toggle('d-none', !isAdmin);
+        document.getElementById('bulk-delete-item').classList.toggle('d-none', !isAdmin);
+
+        if (selected.length > 0) {
+            countSpan.innerText = selected.length;
+            dropdownWrapper.classList.remove('d-none');
+        } else {
+            dropdownWrapper.classList.add('d-none');
+        }
+    };
+
+    window.downloadSelectedCSVs = function() {
+        if (!downloadsEnabled && currentUser.role !== 'admin') {
+            showIndicator('Downloads are currently disabled by the Admin.', 'danger');
+            return;
+        }
+
+        const selected = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(cb => cb.value);
+        if (selected.length === 0) return;
+
+        selected.forEach((id, index) => {
+            setTimeout(() => {
+                downloadCSV(id, true);
+            }, index * 250);
+        });
+
+        showIndicator(`Downloading ${selected.length} selected CSV file(s)...`, 'success');
+    };
+
+    window.deleteSelectedCSVs = async function() {
+        if (!currentUser || currentUser.role !== 'admin') return;
+        const selected = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(cb => cb.value);
+        if (selected.length === 0) return;
+
+        if (!confirm(`Delete ${selected.length} selected CSV file(s) from the cloud database?`)) return;
+
+        const batch = writeBatch(db);
+        selected.forEach(id => {
+            batch.delete(doc(db, "csv_files", id));
+        });
+        await batch.commit();
+
+        showIndicator(`Deleted ${selected.length} CSV file(s) from cloud database.`, 'warning');
+    };
+
+    window.clearNotifications = async function() {
+        if (!currentUser || currentUser.role !== 'admin') return;
+        const snap = await getDocs(collection(db, "notifications"));
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+        showIndicator('Notification trail cleared.', 'info');
+    };
+
+    // ==========================================
+    // 7. USER MANAGEMENT (CLOUD FIRESTORE)
+    // ==========================================
+    window.handleAddUser = async function(e) {
+        e.preventDefault();
+        if (!currentUser || currentUser.role !== 'admin') return;
+
+        const username = document.getElementById('new-username').value.trim();
+        const password = document.getElementById('new-password').value;
+        const level = parseInt(document.getElementById('new-level').value, 10);
+
+        if (username.toLowerCase() === 'admin') {
+            showIndicator('Cannot create another admin account.', 'danger');
+            return;
+        }
+
+        const existingSnap = await getDoc(doc(db, "users", username));
+        if (existingSnap.exists()) {
+            showIndicator('Username already exists.', 'danger');
+            return;
+        }
+
+        await setDoc(doc(db, "users", username), {
+            username,
+            password,
+            role: 'user',
+            level
+        });
+
+        document.getElementById('new-username').value = '';
+        document.getElementById('new-password').value = '';
+        showIndicator(`User "${username}" added to cloud at Level ${level}.`, 'success');
+    };
+
+    window.updateUserLevel = async function(username) {
+        const newLvl = parseInt(document.getElementById(`lvl-${username}`).value, 10);
+        await updateDoc(doc(db, "users", username), { level: newLvl });
+        showIndicator(`Updated "${username}" to Level ${newLvl}.`, 'info');
+    };
+
+    window.resetUserPassword = async function(username) {
+        const newPass = document.getElementById(`pw-${username}`).value;
+        if (!newPass) {
+            showIndicator('Enter a new password first.', 'warning');
+            return;
+        }
+        await updateDoc(doc(db, "users", username), { password: newPass });
+        document.getElementById(`pw-${username}`).value = '';
+        showIndicator(`Password reset for "${username}".`, 'success');
+    };
+
+    window.deleteUser = async function(username) {
+        if (!confirm(`Delete user "${username}"?`)) return;
+        await deleteDoc(doc(db, "users", username));
+        showIndicator(`User "${username}" deleted.`, 'warning');
+    };
+
+    // ==========================================
+    // 8. RENDERING VIEWS
+    // ==========================================
+    function renderFilesTable() {
+        if (!currentUser) return;
+        const tbody = document.getElementById('files-table-body');
+        const banner = document.getElementById('download-disabled-banner');
+        const isAdmin = currentUser.role === 'admin';
+
+        document.getElementById('select-all-files').checked = false;
+        updateBulkActionsUI();
+
+        banner.classList.toggle('d-none', downloadsEnabled);
+
+        const visibleFiles = isAdmin
+            ? cachedFiles
+            : cachedFiles.filter(f => f.requiredLevel <= currentUser.level);
+
+        if (visibleFiles.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No CSV files available for your access level.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = visibleFiles.map(f => {
+            const isDownloadDisabled = (!downloadsEnabled && !isAdmin);
+            const deleteOption = isAdmin
+                ? `<li><hr class="dropdown-divider"></li>
+                   <li><button class="dropdown-item text-danger" type="button" onclick="deleteCSV('${f.id}')">Delete</button></li>`
+                : '';
+
+            return `
+                <tr>
+                    <td>
+                        <input type="checkbox" class="form-check-input file-checkbox" value="${f.id}" onchange="updateBulkActionsUI()">
+                    </td>
+                    <td class="fw-semibold text-light">${f.filename}</td>
+                    <td><span class="badge bg-secondary">Level ${f.requiredLevel}+</span></td>
+                    <td class="small text-muted">${f.uploadedAt}</td>
+                    <td class="text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-info dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                Actions
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow">
+                                <li>
+                                    <button class="dropdown-item ${isDownloadDisabled ? 'disabled text-muted' : 'text-info'}" type="button" onclick="downloadCSV('${f.id}')" ${isDownloadDisabled ? 'disabled' : ''}>
+                                        Download CSV
+                                    </button>
+                                </li>
+                                ${deleteOption}
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function renderUsersTable() {
+        const tbody = document.getElementById('users-table-body');
+        const nonAdminUsers = cachedUsers.filter(u => u.role !== 'admin');
+
+        if (nonAdminUsers.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No standard users added yet.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = nonAdminUsers.map(u => `
+            <tr>
+                <td class="fw-bold">${u.username}</td>
+                <td>
+                    <div class="d-flex">
+                        <input type="number" id="lvl-${u.username}" value="${u.level}" min="1" max="10" class="form-control form-control-sm p-1" style="width:45px">
+                        <button onclick="updateUserLevel('${u.username}')" class="btn btn-sm btn-outline-secondary ms-1 px-1" title="Save Level">✓</button>
+                    </div>
+                </td>
+                <td>
+                    <div class="d-flex">
+                        <input type="password" id="pw-${u.username}" placeholder="New PW" class="form-control form-control-sm p-1" style="width:70px">
+                        <button onclick="resetUserPassword('${u.username}')" class="btn btn-sm btn-outline-warning ms-1 px-1">Set</button>
+                    </div>
+                </td>
+                <td>
+                    <button onclick="deleteUser('${u.username}')" class="btn btn-sm btn-outline-danger px-2">X</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderNotifications(notes) {
+        const box = document.getElementById('notification-trail');
+
+        if (!notes || notes.length === 0) {
+            box.innerHTML = `<div class="text-muted text-center py-2">No user downloads recorded yet.</div>`;
+            return;
+        }
+
+        box.innerHTML = notes.map(n => `
+            <div class="border-bottom border-secondary py-1">
+                <span class="text-info">[${n.date} ${n.time}]</span> ${n.text}
+            </div>
+        `).join('');
+    }
+</script>
+</body>
+</html>
