@@ -45,6 +45,10 @@
             border-radius: 6px;
             padding: 10px;
         }
+        .perm-pill {
+            font-size: 0.7rem;
+            user-select: none;
+        }
     </style>
 </head>
 <body>
@@ -97,9 +101,9 @@
             <!-- LEFT / MAIN COLUMN: UPLOAD & FILE LIST -->
             <div id="main-col" class="col-lg-12">
 
-                <!-- ADMIN ONLY: UPLOAD EXCEL/CSV & GLOBAL DOWNLOAD TOGGLE -->
-                <div id="admin-upload-panel" class="card p-3 mb-4 d-none">
-                    <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3 gap-2">
+                <!-- FILE CONTROLS (ADMIN OR USERS WITH canUpload) -->
+                <div id="file-controls-panel" class="card p-3 mb-4 d-none">
+                    <div id="admin-global-controls" class="d-flex flex-wrap justify-content-between align-items-center border-bottom border-secondary pb-2 mb-3 gap-2 d-none">
                         <h5 class="text-info mb-0">Admin File Controls</h5>
                         <!-- Requirement 9: Enable or Disable Download Button -->
                         <div class="form-check form-switch">
@@ -111,24 +115,27 @@
                     </div>
 
                     <!-- Requirement 2 & 4: Upload Excel (auto-converted to CSV) or CSV -->
-                    <form onsubmit="handleFileUpload(event)">
-                        <div class="row g-2 align-items-end">
-                            <div class="col-md-6">
-                                <label class="form-label small">Select Excel (*.xlsx, *.xls) or *.csv File</label>
-                                <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="form-control form-control-sm" required>
+                    <div id="upload-form-wrapper" class="d-none">
+                        <h6 class="text-success mb-2">Upload Excel / CSV to Database</h6>
+                        <form onsubmit="handleFileUpload(event)">
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-6">
+                                    <label class="form-label small">Select Excel (*.xlsx, *.xls) or *.csv File</label>
+                                    <input type="file" id="file-input" accept=".xlsx,.xls,.csv" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label small">Min Database Access Level (1-10)</label>
+                                    <input type="number" id="file-level" value="1" min="1" max="10" class="form-control form-control-sm" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Convert & Upload CSV</button>
+                                </div>
                             </div>
-                            <div class="col-md-3">
-                                <label class="form-label small">Min Database Access Level (1-10)</label>
-                                <input type="number" id="file-level" value="1" min="1" max="10" class="form-control form-control-sm" required>
+                            <div id="upload-progress-bar" class="progress mt-2 d-none" style="height: 6px;">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 100%"></div>
                             </div>
-                            <div class="col-md-3">
-                                <button type="submit" class="btn btn-success btn-sm w-100 fw-bold">Convert & Upload CSV</button>
-                            </div>
-                        </div>
-                        <div id="upload-progress-bar" class="progress mt-2 d-none" style="height: 6px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated bg-success" style="width: 100%"></div>
-                        </div>
-                    </form>
+                        </form>
+                    </div>
                 </div>
 
                 <!-- DATABASE CSV FILES TABLE -->
@@ -142,7 +149,7 @@
                                     Bulk Actions (<span id="selected-count">0</span>)
                                 </button>
                                 <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow">
-                                    <li>
+                                    <li id="bulk-download-item">
                                         <button class="dropdown-item text-info" type="button" onclick="downloadSelectedCSVs()">
                                             Download Selected
                                         </button>
@@ -164,7 +171,7 @@
                         <table class="table table-dark table-hover align-middle mb-0">
                             <thead>
                                 <tr>
-                                    <th style="width: 40px;">
+                                    <th id="select-col-header" style="width: 40px;" class="d-none">
                                         <input type="checkbox" class="form-check-input" id="select-all-files" onchange="toggleSelectAllFiles(this)" title="Select All Files">
                                     </th>
                                     <th>CSV Filename</th>
@@ -195,21 +202,37 @@
                     </div>
                 </div>
 
-                <!-- Requirement 1: User Management (Admin Hidden) -->
+                <!-- Requirement 1: User Management with Per-User Permissions (Admin Hidden) -->
                 <div class="card p-3">
-                    <h5 class="text-info mb-3">User Management</h5>
-                    <form onsubmit="handleAddUser(event)" class="row g-2 mb-3">
-                        <div class="col-4">
-                            <input type="text" id="new-username" placeholder="Username" class="form-control form-control-sm" required>
+                    <h5 class="text-info mb-3">User Management & Function Access</h5>
+                    <form onsubmit="handleAddUser(event)" class="mb-3">
+                        <div class="row g-2 mb-2">
+                            <div class="col-5">
+                                <input type="text" id="new-username" placeholder="Username" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-4">
+                                <input type="password" id="new-password" placeholder="Password" class="form-control form-control-sm" required>
+                            </div>
+                            <div class="col-3">
+                                <input type="number" id="new-level" value="1" min="1" max="10" title="Access Level (1-10)" class="form-control form-control-sm" required>
+                            </div>
                         </div>
-                        <div class="col-3">
-                            <input type="password" id="new-password" placeholder="Password" class="form-control form-control-sm" required>
-                        </div>
-                        <div class="col-2">
-                            <input type="number" id="new-level" value="1" min="1" max="10" title="Access Level" class="form-control form-control-sm" required>
-                        </div>
-                        <div class="col-3">
-                            <button type="submit" class="btn btn-primary btn-sm w-100">Add User</button>
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 bg-dark p-2 rounded border border-secondary">
+                            <div class="d-flex flex-wrap gap-3 small">
+                                <label class="form-check-label d-flex align-items-center gap-1">
+                                    <input type="checkbox" class="form-check-input" id="new-perm-upload"> Upload
+                                </label>
+                                <label class="form-check-label d-flex align-items-center gap-1">
+                                    <input type="checkbox" class="form-check-input" id="new-perm-download" checked> Download
+                                </label>
+                                <label class="form-check-label d-flex align-items-center gap-1">
+                                    <input type="checkbox" class="form-check-input" id="new-perm-bulk"> Bulk
+                                </label>
+                                <label class="form-check-label d-flex align-items-center gap-1">
+                                    <input type="checkbox" class="form-check-input" id="new-perm-delete"> Delete
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary btn-sm px-3">Add User</button>
                         </div>
                     </form>
 
@@ -219,7 +242,8 @@
                                 <tr>
                                     <th>User</th>
                                     <th>Level</th>
-                                    <th>Reset Password</th>
+                                    <th>Functions (U / DL / B / Del)</th>
+                                    <th>Reset PW</th>
                                     <th>Del</th>
                                 </tr>
                             </thead>
@@ -299,6 +323,29 @@
     let downloadsEnabled = true;
     let unsubscribers = [];
 
+    function normalizePermissions(user) {
+        if (user && user.role === 'admin') {
+            return {
+                canUpload: true,
+                canDownload: true,
+                canBulk: true,
+                canDelete: true
+            };
+        }
+        const p = (user && user.permissions) || {};
+        return {
+            canUpload: Boolean(p.canUpload),
+            canDownload: p.canDownload !== false,
+            canBulk: Boolean(p.canBulk),
+            canDelete: Boolean(p.canDelete)
+        };
+    }
+
+    function hasPerm(permKey) {
+        if (!currentUser) return false;
+        return normalizePermissions(currentUser)[permKey];
+    }
+
     // ==========================================
     // 1. INITIALIZE DEFAULT CLOUD DATA
     // ==========================================
@@ -313,13 +360,15 @@
                     username: "admin",
                     password: "admin123",
                     role: "admin",
-                    level: 10
+                    level: 10,
+                    permissions: { canUpload: true, canDownload: true, canBulk: true, canDelete: true }
                 });
                 await setDoc(doc(db, "users", "user1"), {
                     username: "user1",
                     password: "123",
                     role: "user",
-                    level: 1
+                    level: 1,
+                    permissions: { canUpload: false, canDownload: true, canBulk: false, canDelete: false }
                 });
             }
 
@@ -403,19 +452,28 @@
 
     function setupRoleUI() {
         const isAdmin = currentUser.role === 'admin';
+        const perms = normalizePermissions(currentUser);
         const mainCol = document.getElementById('main-col');
-        const adminUpload = document.getElementById('admin-upload-panel');
+        const controlsPanel = document.getElementById('file-controls-panel');
+        const adminGlobal = document.getElementById('admin-global-controls');
+        const uploadWrapper = document.getElementById('upload-form-wrapper');
         const adminSide = document.getElementById('admin-side-col');
 
         if (isAdmin) {
             mainCol.className = 'col-lg-7';
-            adminUpload.classList.remove('d-none');
+            controlsPanel.classList.remove('d-none');
+            adminGlobal.classList.remove('d-none');
+            uploadWrapper.classList.remove('d-none');
             adminSide.classList.remove('d-none');
         } else {
             mainCol.className = 'col-lg-12';
-            adminUpload.classList.add('d-none');
+            adminGlobal.classList.add('d-none');
             adminSide.classList.add('d-none');
+            uploadWrapper.classList.toggle('d-none', !perms.canUpload);
+            controlsPanel.classList.toggle('d-none', !perms.canUpload);
         }
+
+        document.getElementById('select-col-header').classList.toggle('d-none', !perms.canBulk);
     }
 
     // ==========================================
@@ -454,6 +512,17 @@
                 renderNotifications(notes);
             });
             unsubscribers.push(unsubNotes);
+        } else {
+            // Keep current user's live permissions & level synced in real time
+            const unsubSelf = onSnapshot(doc(db, "users", currentUser.username), (docSnap) => {
+                if (docSnap.exists()) {
+                    currentUser = docSnap.data();
+                    document.getElementById('nav-level').innerText = `Level ${currentUser.level}`;
+                    setupRoleUI();
+                    renderFilesTable();
+                }
+            });
+            unsubscribers.push(unsubSelf);
         }
     }
 
@@ -462,7 +531,10 @@
     // ==========================================
     window.handleFileUpload = function(e) {
         e.preventDefault();
-        if (!currentUser || currentUser.role !== 'admin') return;
+        if (!hasPerm('canUpload')) {
+            showIndicator('You do not have permission to upload files.', 'danger');
+            return;
+        }
 
         const fileInput = document.getElementById('file-input');
         const reqLevel = parseInt(document.getElementById('file-level').value, 10);
@@ -494,6 +566,7 @@
                     filename: csvFilename,
                     content: csvContent,
                     requiredLevel: reqLevel,
+                    uploadedBy: currentUser.username,
                     uploadedAt: new Date().toLocaleString(),
                     createdAt: Date.now()
                 });
@@ -519,7 +592,17 @@
         showIndicator(`Download buttons are now ${isChecked ? 'ENABLED' : 'DISABLED'} for all users.`, 'info');
     };
 
+    function canUserDownload() {
+        if (!hasPerm('canDownload')) return false;
+        if (currentUser.role === 'admin') return true;
+        return downloadsEnabled;
+    }
+
     window.downloadCSV = async function(fileId, silent = false) {
+        if (!hasPerm('canDownload')) {
+            showIndicator('Your account does not have download permission.', 'danger');
+            return;
+        }
         if (!downloadsEnabled && currentUser.role !== 'admin') {
             showIndicator('Downloads are currently disabled by the Admin.', 'danger');
             return;
@@ -551,7 +634,10 @@
     };
 
     window.deleteCSV = async function(fileId) {
-        if (!currentUser || currentUser.role !== 'admin') return;
+        if (!hasPerm('canDelete')) {
+            showIndicator('You do not have permission to delete files.', 'danger');
+            return;
+        }
         if (!confirm('Delete this CSV file from the cloud database?')) return;
 
         await deleteDoc(doc(db, "csv_files", fileId));
@@ -559,6 +645,7 @@
     };
 
     window.toggleSelectAllFiles = function(masterCheckbox) {
+        if (!hasPerm('canBulk')) return;
         document.querySelectorAll('.file-checkbox').forEach(cb => {
             cb.checked = masterCheckbox.checked;
         });
@@ -566,21 +653,30 @@
     };
 
     window.updateBulkActionsUI = function() {
+        const perms = normalizePermissions(currentUser);
         const allBoxes = document.querySelectorAll('.file-checkbox');
         const selected = document.querySelectorAll('.file-checkbox:checked');
         const dropdownWrapper = document.getElementById('bulk-actions-dropdown');
         const countSpan = document.getElementById('selected-count');
         const selectAllEl = document.getElementById('select-all-files');
-        const isAdmin = currentUser && currentUser.role === 'admin';
+
+        if (!perms.canBulk) {
+            dropdownWrapper.classList.add('d-none');
+            return;
+        }
 
         if (selectAllEl) {
             selectAllEl.checked = allBoxes.length > 0 && selected.length === allBoxes.length;
         }
 
-        document.getElementById('bulk-delete-divider').classList.toggle('d-none', !isAdmin);
-        document.getElementById('bulk-delete-item').classList.toggle('d-none', !isAdmin);
+        const allowBulkDl = canUserDownload();
+        const allowBulkDel = perms.canDelete;
 
-        if (selected.length > 0) {
+        document.getElementById('bulk-download-item').classList.toggle('d-none', !allowBulkDl);
+        document.getElementById('bulk-delete-divider').classList.toggle('d-none', !(allowBulkDl && allowBulkDel));
+        document.getElementById('bulk-delete-item').classList.toggle('d-none', !allowBulkDel);
+
+        if (selected.length > 0 && (allowBulkDl || allowBulkDel)) {
             countSpan.innerText = selected.length;
             dropdownWrapper.classList.remove('d-none');
         } else {
@@ -589,8 +685,8 @@
     };
 
     window.downloadSelectedCSVs = function() {
-        if (!downloadsEnabled && currentUser.role !== 'admin') {
-            showIndicator('Downloads are currently disabled by the Admin.', 'danger');
+        if (!canUserDownload()) {
+            showIndicator('Downloads are unavailable for your account or disabled by Admin.', 'danger');
             return;
         }
 
@@ -607,7 +703,10 @@
     };
 
     window.deleteSelectedCSVs = async function() {
-        if (!currentUser || currentUser.role !== 'admin') return;
+        if (!hasPerm('canDelete')) {
+            showIndicator('You do not have permission to delete files.', 'danger');
+            return;
+        }
         const selected = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(cb => cb.value);
         if (selected.length === 0) return;
 
@@ -632,7 +731,7 @@
     };
 
     // ==========================================
-    // 7. USER MANAGEMENT (CLOUD FIRESTORE)
+    // 7. USER MANAGEMENT & PERMISSIONS
     // ==========================================
     window.handleAddUser = async function(e) {
         e.preventDefault();
@@ -641,6 +740,13 @@
         const username = document.getElementById('new-username').value.trim();
         const password = document.getElementById('new-password').value;
         const level = parseInt(document.getElementById('new-level').value, 10);
+
+        const permissions = {
+            canUpload: document.getElementById('new-perm-upload').checked,
+            canDownload: document.getElementById('new-perm-download').checked,
+            canBulk: document.getElementById('new-perm-bulk').checked,
+            canDelete: document.getElementById('new-perm-delete').checked
+        };
 
         if (username.toLowerCase() === 'admin') {
             showIndicator('Cannot create another admin account.', 'danger');
@@ -657,18 +763,35 @@
             username,
             password,
             role: 'user',
-            level
+            level,
+            permissions
         });
 
         document.getElementById('new-username').value = '';
         document.getElementById('new-password').value = '';
+        document.getElementById('new-perm-upload').checked = false;
+        document.getElementById('new-perm-download').checked = true;
+        document.getElementById('new-perm-bulk').checked = false;
+        document.getElementById('new-perm-delete').checked = false;
+
         showIndicator(`User "${username}" added to cloud at Level ${level}.`, 'success');
     };
 
-    window.updateUserLevel = async function(username) {
+    window.saveUserAccess = async function(username) {
+        if (!currentUser || currentUser.role !== 'admin') return;
         const newLvl = parseInt(document.getElementById(`lvl-${username}`).value, 10);
-        await updateDoc(doc(db, "users", username), { level: newLvl });
-        showIndicator(`Updated "${username}" to Level ${newLvl}.`, 'info');
+        const permissions = {
+            canUpload: document.getElementById(`perm-u-${username}`).checked,
+            canDownload: document.getElementById(`perm-dl-${username}`).checked,
+            canBulk: document.getElementById(`perm-b-${username}`).checked,
+            canDelete: document.getElementById(`perm-del-${username}`).checked
+        };
+
+        await updateDoc(doc(db, "users", username), {
+            level: newLvl,
+            permissions
+        });
+        showIndicator(`Saved level & permissions for "${username}".`, 'info');
     };
 
     window.resetUserPassword = async function(username) {
@@ -696,6 +819,8 @@
         const tbody = document.getElementById('files-table-body');
         const banner = document.getElementById('download-disabled-banner');
         const isAdmin = currentUser.role === 'admin';
+        const perms = normalizePermissions(currentUser);
+        const colCount = perms.canBulk ? 5 : 4;
 
         document.getElementById('select-all-files').checked = false;
         updateBulkActionsUI();
@@ -707,40 +832,48 @@
             : cachedFiles.filter(f => f.requiredLevel <= currentUser.level);
 
         if (visibleFiles.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">No CSV files available for your access level.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="${colCount}" class="text-center text-muted py-3">No CSV files available for your access level.</td></tr>`;
             return;
         }
 
         tbody.innerHTML = visibleFiles.map(f => {
-            const isDownloadDisabled = (!downloadsEnabled && !isAdmin);
-            const deleteOption = isAdmin
-                ? `<li><hr class="dropdown-divider"></li>
+            const isDownloadDisabled = !canUserDownload();
+            const checkboxCell = perms.canBulk
+                ? `<td><input type="checkbox" class="form-check-input file-checkbox" value="${f.id}" onchange="updateBulkActionsUI()"></td>`
+                : '';
+
+            const downloadItem = perms.canDownload
+                ? `<li>
+                       <button class="dropdown-item ${isDownloadDisabled ? 'disabled text-muted' : 'text-info'}" type="button" onclick="downloadCSV('${f.id}')" ${isDownloadDisabled ? 'disabled' : ''}>
+                           Download CSV
+                       </button>
+                   </li>`
+                : '';
+
+            const deleteItem = perms.canDelete
+                ? `${perms.canDownload ? '<li><hr class="dropdown-divider"></li>' : ''}
                    <li><button class="dropdown-item text-danger" type="button" onclick="deleteCSV('${f.id}')">Delete</button></li>`
                 : '';
 
+            const actionCell = (downloadItem || deleteItem)
+                ? `<div class="dropdown">
+                       <button class="btn btn-sm btn-info dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                           Actions
+                       </button>
+                       <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow">
+                           ${downloadItem}
+                           ${deleteItem}
+                       </ul>
+                   </div>`
+                : `<span class="badge bg-dark border border-secondary text-muted">No Actions</span>`;
+
             return `
                 <tr>
-                    <td>
-                        <input type="checkbox" class="form-check-input file-checkbox" value="${f.id}" onchange="updateBulkActionsUI()">
-                    </td>
+                    ${checkboxCell}
                     <td class="fw-semibold text-light">${f.filename}</td>
                     <td><span class="badge bg-secondary">Level ${f.requiredLevel}+</span></td>
                     <td class="small text-muted">${f.uploadedAt}</td>
-                    <td class="text-end">
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-info dropdown-toggle fw-bold" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                Actions
-                            </button>
-                            <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark shadow">
-                                <li>
-                                    <button class="dropdown-item ${isDownloadDisabled ? 'disabled text-muted' : 'text-info'}" type="button" onclick="downloadCSV('${f.id}')" ${isDownloadDisabled ? 'disabled' : ''}>
-                                        Download CSV
-                                    </button>
-                                </li>
-                                ${deleteOption}
-                            </ul>
-                        </div>
-                    </td>
+                    <td class="text-end">${actionCell}</td>
                 </tr>
             `;
         }).join('');
@@ -751,30 +884,39 @@
         const nonAdminUsers = cachedUsers.filter(u => u.role !== 'admin');
 
         if (nonAdminUsers.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted">No standard users added yet.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted">No standard users added yet.</td></tr>`;
             return;
         }
 
-        tbody.innerHTML = nonAdminUsers.map(u => `
-            <tr>
-                <td class="fw-bold">${u.username}</td>
-                <td>
-                    <div class="d-flex">
-                        <input type="number" id="lvl-${u.username}" value="${u.level}" min="1" max="10" class="form-control form-control-sm p-1" style="width:45px">
-                        <button onclick="updateUserLevel('${u.username}')" class="btn btn-sm btn-outline-secondary ms-1 px-1" title="Save Level">✓</button>
-                    </div>
-                </td>
-                <td>
-                    <div class="d-flex">
-                        <input type="password" id="pw-${u.username}" placeholder="New PW" class="form-control form-control-sm p-1" style="width:70px">
-                        <button onclick="resetUserPassword('${u.username}')" class="btn btn-sm btn-outline-warning ms-1 px-1">Set</button>
-                    </div>
-                </td>
-                <td>
-                    <button onclick="deleteUser('${u.username}')" class="btn btn-sm btn-outline-danger px-2">X</button>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = nonAdminUsers.map(u => {
+            const p = normalizePermissions(u);
+            return `
+                <tr>
+                    <td class="fw-bold">${u.username}</td>
+                    <td>
+                        <input type="number" id="lvl-${u.username}" value="${u.level}" min="1" max="10" class="form-control form-control-sm p-1" style="width:42px">
+                    </td>
+                    <td>
+                        <div class="d-flex flex-wrap align-items-center gap-2 perm-pill">
+                            <label title="Upload"><input type="checkbox" id="perm-u-${u.username}" ${p.canUpload ? 'checked' : ''}> U</label>
+                            <label title="Download"><input type="checkbox" id="perm-dl-${u.username}" ${p.canDownload ? 'checked' : ''}> DL</label>
+                            <label title="Bulk Actions"><input type="checkbox" id="perm-b-${u.username}" ${p.canBulk ? 'checked' : ''}> B</label>
+                            <label title="Delete Files"><input type="checkbox" id="perm-del-${u.username}" ${p.canDelete ? 'checked' : ''}> Del</label>
+                            <button onclick="saveUserAccess('${u.username}')" class="btn btn-sm btn-outline-success py-0 px-1" title="Save Level & Permissions">✓</button>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex">
+                            <input type="password" id="pw-${u.username}" placeholder="New PW" class="form-control form-control-sm p-1" style="width:65px">
+                            <button onclick="resetUserPassword('${u.username}')" class="btn btn-sm btn-outline-warning ms-1 px-1">Set</button>
+                        </div>
+                    </td>
+                    <td>
+                        <button onclick="deleteUser('${u.username}')" class="btn btn-sm btn-outline-danger px-2">X</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     function renderNotifications(notes) {
